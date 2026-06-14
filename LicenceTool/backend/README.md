@@ -88,7 +88,8 @@ Content-Type: application/json
    ```powershell
    docker compose up -d
    ```
-   - Postgres: `localhost:5432` (db `licence_tool`, user/pass `licence`/`licence`)
+   - Backend Postgres: `localhost:5632` (db `licence_tool`, user/pass `licence`/`licence`)
+   - Keycloak Postgres: `localhost:5633` (db `keycloak`, user/pass `keycloak`/`keycloak`)
    - Keycloak: `http://localhost:8081` (admin `admin`/`admin`), realm
      `licence-tool` auto-imported with three demo users.
 
@@ -101,7 +102,7 @@ Content-Type: application/json
 
 | Variable               | Default                                              |
 |------------------------|------------------------------------------------------|
-| `DATABASE_URL`         | `jdbc:postgresql://localhost:5432/licence_tool`      |
+| `DATABASE_URL`         | `jdbc:postgresql://localhost:5632/licence_tool`      |
 | `DATABASE_USER`        | `licence`                                            |
 | `DATABASE_PASSWORD`    | `licence`                                            |
 | `KEYCLOAK_ISSUER_URI`  | `http://localhost:8081/realms/licence-tool`          |

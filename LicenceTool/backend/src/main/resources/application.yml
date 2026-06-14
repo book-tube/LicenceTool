@@ -3,7 +3,7 @@ spring:
     name: licence-tool-backend
 
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/licence_tool}
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5632/licence_tool}
     username: ${DATABASE_USER:licence}
     password: ${DATABASE_PASSWORD:licence}
     driver-class-name: org.postgresql.Driver

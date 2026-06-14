@@ -10,10 +10,9 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Stateless security backed by Keycloak (OIDC). This application exposes no REST
- * endpoints; authorization is enforced at the service layer through method
- * security ({@link EnableMethodSecurity}). The resource-server config still
- * validates Keycloak access tokens for any infrastructure endpoints.
+ * Stateless security backed by Keycloak (OIDC). HTTP requests are authenticated
+ * as a resource server, while method security provides an additional authorization
+ * layer for controller and service operations.
  */
 @Configuration
 @EnableMethodSecurity
