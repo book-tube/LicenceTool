@@ -1,11 +1,11 @@
 # Licence Supply Website Requirements
 
 ## 1. Product Scope
-Build a website to sell software licences to two customer segments:
+Build a website to sell software licenses to two customer segments:
 - Private users (B2C)
 - Business users (B2B)
 
-An admin role manages content, catalogue, licence inventory, and operations.
+An admin role manages content, catalogue, license inventory, and operations.
 
 ## 2. User Roles and Rights
 

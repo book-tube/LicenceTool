@@ -415,6 +415,45 @@ Beispiel Audit Log:
 
 ---
 
+## Data Model, Documentation, and QA (Point 4)
+
+### Goal
+Verify that the implemented data model and documentation fully support:
+- Unique licence assignment and lifecycle state tracking
+- Multi-item order creation with quantity support
+- Role-based access control for admin/private/business users
+- Audit logging for assignment, creation, and refunds
+
+### Focus areas
+- `docs/schema.sql`
+- `requirements.md`
+- `IMPLEMENTATION_GUIDE.md`
+- `backend/src/services/licenceService.ts`
+- `backend/src/services/auditService.ts`
+- `backend/src/middleware/auth.ts`
+
+### Review checklist
+1. Schema validation
+   - `licence_keys.key_value` has a UNIQUE constraint
+   - `order_items` supports `quantity` and `assigned_key_ids`
+   - `audit_logs` stores `action`, `resource_type`, `resource_id`, and `details`
+   - `roles` table and `users.role_id` support RBAC
+2. Documentation alignment
+   - Requirements map clearly to implementation artifacts
+   - Point-4 responsibilities are documented for the team
+   - Acceptance criteria are easy to test and verify
+3. QA validation
+   - Multi-item checkout with multiple products and quantities
+   - Unique key allocation and status updates
+   - User can only access their own data
+   - Admin-only endpoints are protected
+   - Audit log entries are created for key assignment and refunds
+
+### Result
+This section closes the loop between requirements, implementation, and verification for the architecture.
+
+---
+
 ## Setup & Ausführung
 
 ### 1. Datenbank erstellen

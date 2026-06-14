@@ -90,10 +90,20 @@ export const ShoppingCart: React.FC = () => {
         vat_id: user.role === 'business' ? 'DE123456789' : undefined
       });
 
-      setOrderResult(response.data);
+      // Fetch created order details (includes allocated licence keys)
+      const created = response.data;
+      try {
+        const details = await axios.get(`/api/user/${user.id}/orders/${created.order_id}`);
+        setOrderResult(details.data);
+      } catch (err) {
+        // fallback to basic response if details endpoint fails
+        setOrderResult(created);
+      }
+
       setCart([]); // Clear cart after successful order
     } catch (error) {
-      alert('Fehler beim Erstellen der Bestellung');
+      console.error('Checkout error', error);
+      alert('Fehler beim Erstellen der Bestellung: ' + (error?.response?.data?.error || error.message));
     } finally {
       setIsSubmitting(false);
     }
@@ -264,6 +274,32 @@ export const ShoppingCart: React.FC = () => {
                   {isSubmitting ? 'Wird bestellt...' : 'Bestellung abschließen'}
                 </button>
               </div>
+            </div>
+          )}
+
+          {orderResult && (
+            <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#eef9f1', borderRadius: '6px' }}>
+              <h3>Order confirmation</h3>
+              <div><strong>Order:</strong> {orderResult.order_number || orderResult.order_id}</div>
+              <div><strong>Status:</strong> {orderResult.status || 'pending'}</div>
+
+              {orderResult.items ? (
+                <div style={{ marginTop: '10px' }}>
+                  <h4>Assigned licence keys</h4>
+                  {orderResult.items.map((item: any) => (
+                    <div key={item.item_id} style={{ marginBottom: '10px' }}>
+                      <div style={{ fontWeight: 'bold' }}>{item.product_name} × {item.quantity}</div>
+                      {item.licence_keys && item.licence_keys.length > 0 ? (
+                        item.licence_keys.map((k: string, i: number) => (
+                          <div key={i} style={{ fontFamily: 'monospace', backgroundColor: '#fff', padding: '6px', marginTop: '6px', borderRadius: '4px' }}>{k}</div>
+                        ))
+                      ) : (
+                        <div style={{ color: '#666' }}>Keys not yet assigned</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           )}
 
