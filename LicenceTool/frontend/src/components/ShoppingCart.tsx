@@ -60,22 +60,22 @@ export const ShoppingCart: React.FC = () => {
   }, [isShoppingRole]);
 
   const totalCents = useMemo(
-    () => cart.reduce((total, item) => total + item.unit_price_cents * item.quantity, 0),
+    () => cart.reduce((total, item) => total + item.unitPriceCents * item.quantity, 0),
     [cart]
   );
 
   const addToCart = (productId: string) => {
-    const product = availableProducts.find((entry) => entry.id === productId);
-    if (!product || !product.in_stock) {
+    const product = products.find((entry) => entry.id === productId);
+    if (!product || !product.inStock) {
       return;
     }
 
     const quantityToAdd = Math.max(1, quantities[productId] || 1);
     setCart((current) => {
-      const existingItem = current.find((item) => item.product_id === productId);
+      const existingItem = current.find((item) => item.productId === productId);
       if (existingItem) {
         return current.map((item) =>
-          item.product_id === productId
+          item.productId === productId
             ? { ...item, quantity: item.quantity + quantityToAdd }
             : item
         );
@@ -84,17 +84,17 @@ export const ShoppingCart: React.FC = () => {
       return [
         ...current,
         {
-          product_id: productId,
-          product_name: product.name,
+          productId: productId,
+          productName: product.name,
           quantity: quantityToAdd,
-          unit_price_cents: product.price_cents
+          unitPriceCents: product.priceCents
         }
       ];
     });
   };
 
   const removeFromCart = (productId: string) => {
-    setCart((current) => current.filter((item) => item.product_id !== productId));
+    setCart((current) => current.filter((item) => item.productId !== productId));
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
@@ -107,7 +107,7 @@ export const ShoppingCart: React.FC = () => {
 
     setCart((current) =>
       current.map((item) =>
-        item.product_id === productId
+        item.productId === productId
           ? { ...item, quantity: Math.max(1, Math.floor(quantity)) }
           : item
       )
@@ -136,13 +136,13 @@ export const ShoppingCart: React.FC = () => {
     try {
       const payload = {
         items: cart.map((item) => ({
-          product_id: item.product_id,
+          productId: item.productId,
           quantity: item.quantity
         })),
-        billing_email: billingEmail.trim()
+        billingEmail: billingEmail.trim()
       };
 
-      const response = await axios.post<OrderResult>(`/api/user/${user.id}/orders`, payload);
+      const response = await axios.post<OrderResult>(`/api/orders`, payload);
 
       setOrderResult(response.data);
       setCart([]);
@@ -166,6 +166,10 @@ export const ShoppingCart: React.FC = () => {
     );
   }
 
+  if (isLoadingProducts) {
+    return <div className="app-shell page-section">Produkte werden geladen...</div>;
+  }
+
   return (
     <div className="app-shell page-section">
       <section className="surface-card">
@@ -183,12 +187,14 @@ export const ShoppingCart: React.FC = () => {
       <div className="surface-grid surface-grid-cart">
         <section className="surface-card">
           <h2>Produktkatalog</h2>
-          {availableProducts.map((product) => (
+          {products.map((product) => (
             <article key={product.id} className="catalog-item">
               <h3>{product.name}</h3>
-              <div className="item-price">EUR {(product.price_cents / 100).toFixed(2)}</div>
+              <div className="item-price">EUR {(product.priceCents / 100).toFixed(2)}</div>
               <div className="muted-text meta-row">
-                Typ: {product.licence_type} | Laufzeit: {product.duration} | Plattform: {product.platform}
+                Typ: {product.licenceType}
+                {product.durationMonths ? ` | Laufzeit: ${product.durationMonths} Monate` : ''}
+                {product.platform ? ` | Plattform: ${product.platform}` : ''}
               </div>
 
               <div className="inline-actions">
@@ -206,10 +212,10 @@ export const ShoppingCart: React.FC = () => {
                 />
                 <button
                   onClick={() => addToCart(product.id)}
-                  disabled={!product.in_stock}
+                  disabled={!product.inStock}
                   className="btn btn-primary"
                 >
-                  {product.in_stock ? 'In den Warenkorb' : 'Nicht verfuegbar'}
+                  {product.inStock ? 'In den Warenkorb' : 'Nicht verfuegbar'}
                 </button>
               </div>
             </article>
@@ -223,27 +229,27 @@ export const ShoppingCart: React.FC = () => {
           ) : (
             <div>
               {cart.map((item) => (
-                <div key={item.product_id} className="cart-row">
-                  <div className="cart-title">{item.product_name}</div>
+                <div key={item.productId} className="cart-row">
+                  <div className="cart-title">{item.productName}</div>
                   <div className="inline-actions">
-                    <button className="btn btn-ghost" onClick={() => updateQuantity(item.product_id, item.quantity - 1)}>
+                    <button className="btn btn-ghost" onClick={() => updateQuantity(item.productId, item.quantity - 1)}>
                       -
                     </button>
                     <input
                       type="number"
                       min="1"
                       value={item.quantity}
-                      onChange={(event) => updateQuantity(item.product_id, Number(event.target.value))}
+                      onChange={(event) => updateQuantity(item.productId, Number(event.target.value))}
                       className="text-input qty-input"
                     />
-                    <button className="btn btn-ghost" onClick={() => updateQuantity(item.product_id, item.quantity + 1)}>
+                    <button className="btn btn-ghost" onClick={() => updateQuantity(item.productId, item.quantity + 1)}>
                       +
                     </button>
                     <span className="cart-sum">
-                      EUR {((item.unit_price_cents * item.quantity) / 100).toFixed(2)}
+                      EUR {((item.unitPriceCents * item.quantity) / 100).toFixed(2)}
                     </span>
                   </div>
-                  <button className="btn btn-link-danger" onClick={() => removeFromCart(item.product_id)}>
+                  <button className="btn btn-link-danger" onClick={() => removeFromCart(item.productId)}>
                     Entfernen
                   </button>
                 </div>
@@ -282,13 +288,10 @@ export const ShoppingCart: React.FC = () => {
             <div className="alert alert-success" style={{ marginTop: '15px' }}>
               <h3>Bestellung erfolgreich erstellt</h3>
               <p>
-                <strong>Bestellnummer:</strong> {orderResult.order_number}
+                <strong>Bestellnummer:</strong> {orderResult.orderNumber}
               </p>
               <p>
-                <strong>Positionen:</strong> {orderResult.item_count}
-              </p>
-              <p>
-                <strong>Betrag:</strong> EUR {(orderResult.total_amount_cents / 100).toFixed(2)}
+                <strong>Betrag:</strong> {orderResult.currency} {(orderResult.totalAmountCents / 100).toFixed(2)}
               </p>
               <p className="muted-text">
                 Die zugewiesenen Lizenzschluessel sehen Sie im Benutzer-Dashboard.

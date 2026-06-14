@@ -56,6 +56,8 @@ const MainNav: React.FC = () => {
 const LoginPage: React.FC = () => {
   const { login, user } = useAuth();
   const navigate = useNavigate();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -63,16 +65,14 @@ const LoginPage: React.FC = () => {
     return <Navigate to="/" replace />;
   }
 
-  const quickLogin = async (role: 'admin' | 'user') => {
+  const doLogin = async (u: string, p: string) => {
     setLoading(true);
     setError(null);
-
     try {
-      const email = role === 'admin' ? 'admin@licence.local' : 'user@licence.local';
-      await login(email, 'demo');
+      await login(u, p);
       navigate('/');
     } catch {
-      setError('Login fehlgeschlagen.');
+      setError('Login fehlgeschlagen. Bitte Zugangsdaten prüfen.');
     } finally {
       setLoading(false);
     }
@@ -80,31 +80,58 @@ const LoginPage: React.FC = () => {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    await quickLogin('user');
+    await doLogin(username, password);
   };
 
   return (
     <div className="app-shell page-section">
       <div className="surface-card auth-card">
-        <p className="eyebrow">Demo-Anmeldung</p>
-        <h1>Wählen Sie Ihre Rolle</h1>
+        <p className="eyebrow">Anmeldung</p>
+        <h1>Licence Supply Platform</h1>
         <p className="muted-text">
-          Zwei klare Zugänge für die Demo: Admin verwaltet alle Kunden und Lizenzen, User kauft nur für sich selbst.
+          Melden Sie sich mit Ihrem Keycloak-Konto an.
         </p>
         {error && <div className="alert alert-danger">{error}</div>}
-        <div className="surface-grid" style={{ marginBottom: '14px' }}>
-          <button type="button" onClick={() => quickLogin('admin')} disabled={loading} className="btn btn-primary btn-full">
-            Als Admin anmelden
-          </button>
-          <button type="button" onClick={() => quickLogin('user')} disabled={loading} className="btn btn-ghost btn-full">
-            Als User anmelden
-          </button>
-        </div>
         <form onSubmit={submit}>
-          <button type="submit" disabled={loading} className="btn btn-link-danger">
-            Standard: User-Demo starten
+          <div className="field-row">
+            <label htmlFor="username">Benutzername</label>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="text-input"
+              autoComplete="username"
+              required
+            />
+          </div>
+          <div className="field-row">
+            <label htmlFor="password">Passwort</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="text-input"
+              autoComplete="current-password"
+              required
+            />
+          </div>
+          <button type="submit" disabled={loading} className="btn btn-primary btn-full" style={{ marginTop: '12px' }}>
+            {loading ? 'Anmeldung...' : 'Anmelden'}
           </button>
         </form>
+        <div style={{ marginTop: '16px', borderTop: '1px solid #eee', paddingTop: '12px' }}>
+          <p className="muted-text" style={{ marginBottom: '8px' }}>Demo-Schnellzugang (Keycloak-Testnutzer):</p>
+          <div className="surface-grid">
+            <button type="button" onClick={() => doLogin('admin-user', 'admin')} disabled={loading} className="btn btn-ghost btn-full">
+              Admin (admin-user / admin)
+            </button>
+            <button type="button" onClick={() => doLogin('private-user', 'private')} disabled={loading} className="btn btn-ghost btn-full">
+              Privat (private-user / private)
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
