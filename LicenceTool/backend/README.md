@@ -14,10 +14,9 @@ Node.js/Express service.
 | Authentication | **Keycloak** (OAuth2 / OIDC resource server, JWT)     |
 | Build          | Maven                                                  |
 
-> **No REST layer.** As requested, this module exposes **no REST controllers**.
-> All capabilities are implemented as Spring `@Service` beans (the application /
-> domain layer). Authorization is enforced with method security
-> (`@PreAuthorize`) so it applies wherever the services are invoked.
+> **REST API.** Customer checkout and admin order operations are exposed via REST
+> controllers under `/api`. Authorization is enforced both at the controller and
+> the service layer (method security with `@PreAuthorize`) for defence in depth.
 
 ## Architecture
 
@@ -27,9 +26,45 @@ com.licencetool
 ├── repository    # Spring Data JPA repositories
 ├── service       # Business logic
 │   ├── LicenceService   # unique key allocation (pessimistic lock) + revocation
-│   ├── OrderService     # multi-item orders, fulfilment, refunds, ownership-scoped reads
+│   ├── OrderService     # multi-item orders, fulfilment, refunds/cancellations, ownership-scoped reads
 │   └── AuditService     # audit trail (REQUIRES_NEW transactions)
+├── web           # REST controllers, DTOs, mapper, exception handling
+│   ├── OrderController       # POST/GET /api/orders ... (checkout, pay, list, detail)
+│   └── AdminOrderController  # /api/admin/orders ... (list, refund, cancel)
 └── security      # Keycloak JWT role mapping + ownership-based @PreAuthorize helpers
+```
+
+## REST API
+
+| Method & path                          | Role            | Purpose                                            |
+|----------------------------------------|-----------------|----------------------------------------------------|
+| `POST /api/orders`                     | authenticated   | Create a multi-item order; auto-allocate unique keys |
+| `POST /api/orders/{id}/pay`            | owner / admin   | Confirm payment, fulfil and deliver keys           |
+| `GET  /api/orders`                     | authenticated   | List the caller's own orders                       |
+| `GET  /api/orders/{id}`                | owner / admin   | Order detail incl. assigned licence keys           |
+| `GET  /api/admin/orders`               | admin           | List all orders                                    |
+| `POST /api/admin/orders/{id}/refund`   | admin           | Refund order and revoke its keys                   |
+| `POST /api/admin/orders/{id}/cancel`   | admin           | Cancel order and revoke its keys                   |
+
+The acting user is always taken from the Keycloak JWT (`sub` → local profile),
+never from the request body.
+
+### Example: multi-item checkout
+
+```http
+POST /api/orders
+Authorization: Bearer <keycloak access token>
+Content-Type: application/json
+
+{
+  "items": [
+    { "productId": "11111111-1111-1111-1111-111111111111", "quantity": 2 },
+    { "productId": "22222222-2222-2222-2222-222222222222", "quantity": 1 }
+  ],
+  "billingEmail": "buyer@example.com",
+  "companyName": "Acme Ltd",
+  "vatId": "DE123456789"
+}
 ```
 
 ### How the requirements are met
@@ -41,7 +76,9 @@ com.licencetool
 - **3.3 / 5 RBAC & data isolation** — Keycloak realm roles (`admin`, `private`,
   `business`) map to Spring authorities; `@PreAuthorize` + the `authz` bean
   restrict users to their own data and reserve admin actions.
-- **3.6 Refunds** — `OrderService.refundOrder` (admin only) revokes linked keys.
+- **3.6 Refunds / cancellations** — `OrderService.refundOrder` and
+  `cancelOrder` (admin only) revoke linked keys via `POST /api/admin/orders/{id}/refund`
+  and `.../cancel`.
 - **3.7 Auditability** — `AuditService` records key generation/assignment,
   refunds and admin actions with actor + timestamp.
 

@@ -3,6 +3,7 @@ package com.licencetool.security;
 import com.licencetool.domain.User;
 import com.licencetool.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -35,6 +36,15 @@ public class CurrentUserService {
 
     public Optional<UUID> currentUserId() {
         return currentUser().map(User::getId);
+    }
+
+    /**
+     * The current user's id, or a 403 if the authenticated Keycloak principal has
+     * no provisioned local profile.
+     */
+    public UUID requireCurrentUserId() {
+        return currentUserId().orElseThrow(() -> new AccessDeniedException(
+                "Authenticated user has no local profile provisioned"));
     }
 }
 

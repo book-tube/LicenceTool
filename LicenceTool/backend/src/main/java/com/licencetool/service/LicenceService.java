@@ -48,6 +48,8 @@ public class LicenceService {
             key.setOrderItem(orderItem);
         }
         licenceKeyRepository.saveAll(available);
+        // Keep the in-memory graph consistent so the order response can list the keys.
+        orderItem.getAssignedKeys().addAll(available);
 
         List<UUID> assignedKeyIds = available.stream().map(LicenceKey::getId).toList();
         auditService.logKeyAssignment(actorId, orderItem.getOrder().getId(), assignedKeyIds);

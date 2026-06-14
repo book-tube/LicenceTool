@@ -80,55 +80,93 @@ public class OrderService {
         }
 
         auditService.logOrderCreated(userId, saved.getId(), total, saved.getItems().size());
-        return saved;
+        return initializeGraph(saved);
     }
 
     /**
      * Marks payment received and delivers keys.
-     * REQUIREMENT 3.5: successful payment triggers fulfilment.
+     * REQUIREMENT 3.5: successful payment triggers fulfilment. Only the order
+     * owner (or an admin) may pay for an order.
      */
     @Transactional
+    @PreAuthorize("@authz.canAccessOrder(#orderId)")
     public Order markPaidAndFulfil(UUID orderId) {
         Order order = getOrderEntity(orderId);
+        if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.PAID) {
+            throw new IllegalStateException("Order cannot be fulfilled from status " + order.getStatus());
+        }
         order.setStatus(OrderStatus.FULFILLED);
         order.getItems().forEach(i -> i.setStatus(OrderItemStatus.DELIVERED));
-        return order;
+        return initializeGraph(order);
     }
 
     /**
-     * Admin refund: revokes the linked keys and flags the order.
+     * Admin refund: revokes the linked keys and flags the order REFUNDED.
      * REQUIREMENT 3.6.
      */
     @Transactional
     @PreAuthorize("hasRole('admin')")
     public List<UUID> refundOrder(UUID orderId, UUID actorId) {
+        return revokeAndClose(orderId, actorId, OrderStatus.REFUNDED);
+    }
+
+    /**
+     * Admin cancellation: revokes the linked keys and flags the order CANCELLED.
+     * REQUIREMENT 3.6: admin can process refunds/cancellations.
+     */
+    @Transactional
+    @PreAuthorize("hasRole('admin')")
+    public List<UUID> cancelOrder(UUID orderId, UUID actorId) {
+        return revokeAndClose(orderId, actorId, OrderStatus.CANCELLED);
+    }
+
+    private List<UUID> revokeAndClose(UUID orderId, UUID actorId, OrderStatus newStatus) {
         Order order = getOrderEntity(orderId);
+        if (order.getStatus() == OrderStatus.REFUNDED || order.getStatus() == OrderStatus.CANCELLED) {
+            throw new IllegalStateException("Order is already " + order.getStatus());
+        }
         List<UUID> revoked = licenceService.revokeLicencesForOrder(orderId, actorId);
-        order.setStatus(OrderStatus.REFUNDED);
+        order.setStatus(newStatus);
         return revoked;
     }
 
     @Transactional(readOnly = true)
     @PreAuthorize("@authz.isSelfOrAdmin(#userId)")
     public List<Order> getOrdersForUser(UUID userId) {
-        return orderRepository.findByUser_IdOrderByCreatedAtDesc(userId);
+        List<Order> orders = orderRepository.findByUser_IdOrderByCreatedAtDesc(userId);
+        orders.forEach(o -> o.getItems().size()); // initialize item count within tx
+        return orders;
     }
 
     @Transactional(readOnly = true)
     @PreAuthorize("@authz.canAccessOrder(#orderId)")
     public Order getOrder(UUID orderId) {
-        return getOrderEntity(orderId);
+        return initializeGraph(getOrderEntity(orderId));
     }
 
     @Transactional(readOnly = true)
     @PreAuthorize("hasRole('admin')")
     public List<Order> getAllOrders() {
-        return orderRepository.findAll();
+        List<Order> orders = orderRepository.findAll();
+        orders.forEach(o -> o.getItems().size());
+        return orders;
     }
 
     private Order getOrderEntity(UUID orderId) {
         return orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+    }
+
+    /**
+     * Forces initialization of the lazy associations needed to build a full
+     * order response, so it can be serialized after the transaction closes.
+     */
+    private Order initializeGraph(Order order) {
+        order.getItems().forEach(item -> {
+            item.getProduct().getName();
+            item.getAssignedKeys().forEach(LicenceKey::getKeyValue);
+        });
+        return order;
     }
 
     private String generateOrderNumber() {
