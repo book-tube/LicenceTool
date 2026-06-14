@@ -11,7 +11,8 @@ import java.util.UUID;
 /**
  * A globally unique licence key.
  * REQUIREMENT 3.1: a key can only be assigned once to one order line. The
- * {@code orderItem} association plus a partial unique index enforce this.
+ * The {@code orderItem} association records the single order line that owns a
+ * key; multiple key rows may belong to the same multi-quantity order line.
  */
 @Entity
 @Table(name = "licence_keys")

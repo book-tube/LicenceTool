@@ -130,6 +130,9 @@ const LoginPage: React.FC = () => {
             <button type="button" onClick={() => doLogin('private-user', 'private')} disabled={loading} className="btn btn-ghost btn-full">
               Privat (private-user / private)
             </button>
+            <button type="button" onClick={() => doLogin('business-user', 'business')} disabled={loading} className="btn btn-ghost btn-full">
+              Business (business-user / business)
+            </button>
           </div>
         </div>
       </div>

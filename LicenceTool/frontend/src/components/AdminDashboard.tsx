@@ -183,8 +183,9 @@ export const AdminDashboard: React.FC = () => {
         </thead>
         <tbody>
           {visibleOrders.map((order) => {
-            const statusStyle = statusStyles[order.status] || { backgroundColor: '#f2f2f2', color: '#333' };
-            const canRefund = order.status !== 'refunded';
+            const normalizedStatus = order.status.toLowerCase();
+            const statusStyle = statusStyles[normalizedStatus] || { backgroundColor: '#f2f2f2', color: '#333' };
+            const canRefund = normalizedStatus !== 'refunded' && normalizedStatus !== 'cancelled';
 
             return (
               <tr key={order.id}>

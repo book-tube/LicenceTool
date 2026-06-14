@@ -23,6 +23,7 @@
   ],
   "users": [
     {
+      "id": "d1496866-bb32-4152-95dd-064d70c56e41",
       "username": "admin-user",
       "enabled": true,
       "email": "admin@licence.local",
@@ -33,6 +34,7 @@
       "realmRoles": ["admin"]
     },
     {
+      "id": "fe7b24a5-34c7-4a11-802b-e06d082aae86",
       "username": "private-user",
       "enabled": true,
       "email": "private@licence.local",
@@ -43,6 +45,7 @@
       "realmRoles": ["private"]
     },
     {
+      "id": "27fb656a-e52a-4317-b194-6fb5fcbd6935",
       "username": "business-user",
       "enabled": true,
       "email": "business@licence.local",

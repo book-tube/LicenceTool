@@ -68,9 +68,9 @@ Content-Type: application/json
 ```
 
 ### How the requirements are met
-- **3.1 Unique keys** — `licence_keys.key_value` is `UNIQUE`; a partial unique
-  index on `order_item_id` guarantees a key is assigned to at most one order
-  line. Allocation locks candidate rows (`PESSIMISTIC_WRITE`).
+- **3.1 Unique keys** — `licence_keys.key_value` is `UNIQUE`; each key row has
+  one optional `order_item_id`, while an order line can receive multiple keys.
+  Allocation locks candidate rows (`PESSIMISTIC_WRITE`).
 - **3.2 Multi-item purchasing** — `OrderService.createOrder` accepts multiple
   lines and quantities and allocates one key per unit in a single transaction.
 - **3.3 / 5 RBAC & data isolation** — Keycloak realm roles (`admin`, `private`,
@@ -97,6 +97,21 @@ Content-Type: application/json
    ```powershell
    mvn spring-boot:run
    ```
+
+## End-to-end test data
+
+Flyway seeds products, available licence keys, and representative private and
+business orders. The matching Keycloak users are imported with stable IDs:
+
+| Role       | Username        | Password   |
+|------------|-----------------|------------|
+| Admin      | `admin-user`    | `admin`    |
+| Private    | `private-user`  | `private`  |
+| Business   | `business-user` | `business` |
+
+The private account starts with a fulfilled multi-item order and visible licence
+keys. The business account starts with an order that can be exercised from the
+admin refund flow. New checkout tests have available stock for all seeded products.
 
 ## Configuration (env vars)
 
