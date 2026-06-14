@@ -4,13 +4,12 @@ import { useAuth } from '../context/AuthContext';
 
 interface Order {
   id: string;
-  order_number: string;
+  orderNumber: string;
   status: string;
-  total_amount_cents: number;
-  email: string;
-  company_name?: string;
-  item_count: number;
-  created_at: string;
+  totalAmountCents: number;
+  currency: string;
+  itemCount: number;
+  createdAt: string;
 }
 
 const statusStyles: Record<string, { backgroundColor: string; color: string }> = {
@@ -73,8 +72,8 @@ export const AdminDashboard: React.FC = () => {
     return orders.reduce(
       (acc, order) => {
         acc.orderCount += 1;
-        acc.itemCount += Number(order.item_count || 0);
-        acc.revenueCents += Number(order.total_amount_cents || 0);
+        acc.itemCount += Number(order.itemCount || 0);
+        acc.revenueCents += Number(order.totalAmountCents || 0);
         return acc;
       },
       { orderCount: 0, itemCount: 0, revenueCents: 0 }
@@ -88,7 +87,7 @@ export const AdminDashboard: React.FC = () => {
     }
 
     return orders.filter((order) => {
-      return [order.order_number, order.email, order.company_name || '', order.status]
+      return [order.orderNumber, order.status]
         .join(' ')
         .toLowerCase()
         .includes(normalizedSearch);
@@ -99,8 +98,8 @@ export const AdminDashboard: React.FC = () => {
     return visibleOrders.reduce(
       (acc, order) => {
         acc.orderCount += 1;
-        acc.itemCount += Number(order.item_count || 0);
-        acc.revenueCents += Number(order.total_amount_cents || 0);
+        acc.itemCount += Number(order.itemCount || 0);
+        acc.revenueCents += Number(order.totalAmountCents || 0);
         return acc;
       },
       { orderCount: 0, itemCount: 0, revenueCents: 0 }
@@ -108,7 +107,7 @@ export const AdminDashboard: React.FC = () => {
   }, [visibleOrders]);
 
   const uniqueCustomerCount = useMemo(() => {
-    return new Set(visibleOrders.map((order) => order.email)).size;
+    return visibleOrders.length;
   }, [visibleOrders]);
 
   if (!user) {
@@ -174,7 +173,7 @@ export const AdminDashboard: React.FC = () => {
         <thead>
           <tr>
             <th>Bestellnummer</th>
-            <th>Kunde</th>
+            <th>Währung</th>
             <th>Artikel</th>
             <th>Betrag</th>
             <th>Status</th>
@@ -189,15 +188,10 @@ export const AdminDashboard: React.FC = () => {
 
             return (
               <tr key={order.id}>
-                <td>{order.order_number}</td>
-                <td>
-                  {order.email}
-                  {order.company_name && (
-                    <div className="muted-text">{order.company_name}</div>
-                  )}
-                </td>
-                <td style={{ textAlign: 'center' }}>{order.item_count}</td>
-                <td>EUR {(order.total_amount_cents / 100).toFixed(2)}</td>
+                <td>{order.orderNumber}</td>
+                <td>{order.currency}</td>
+                <td style={{ textAlign: 'center' }}>{order.itemCount}</td>
+                <td>{order.currency} {(order.totalAmountCents / 100).toFixed(2)}</td>
                 <td>
                   <span
                     style={{
@@ -212,7 +206,7 @@ export const AdminDashboard: React.FC = () => {
                     {order.status}
                   </span>
                 </td>
-                <td>{new Date(order.created_at).toLocaleDateString('de-DE')}</td>
+                <td>{new Date(order.createdAt).toLocaleDateString('de-DE')}</td>
                 <td>
                   <button
                     onClick={() => handleRefund(order.id)}

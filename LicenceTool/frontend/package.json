@@ -2,7 +2,7 @@
   "name": "licence-tool-frontend",
   "version": "1.0.0",
   "description": "Frontend für Licence Supply Platform",
-  "proxy": "http://localhost:3000",
+  "proxy": "http://localhost:8080",
   "main": "src/index.tsx",
   "scripts": {
     "start": "react-scripts start",

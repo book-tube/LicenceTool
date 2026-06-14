@@ -1,76 +1,63 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 
 interface Product {
   id: string;
   name: string;
-  price_cents: number;
-  licence_type: string;
-  duration: string;
-  platform: string;
-  in_stock: boolean;
+  priceCents: number;
+  licenceType: string;
+  durationMonths: number | null;
+  platform: string | null;
+  language: string | null;
+  inStock: boolean;
 }
 
 interface CartItem {
-  product_id: string;
-  product_name: string;
+  productId: string;
+  productName: string;
   quantity: number;
-  unit_price_cents: number;
+  unitPriceCents: number;
 }
 
 interface OrderResult {
-  order_id: string;
-  order_number: string;
-  total_amount_cents: number;
-  item_count: number;
+  id: string;
+  orderNumber: string;
+  totalAmountCents: number;
+  currency: string;
   status: string;
 }
 
-const availableProducts: Product[] = [
-  {
-    id: 'prod-1',
-    name: 'Office Pro - Jahreslizenz',
-    price_cents: 9999,
-    licence_type: 'Single User',
-    duration: '12 Monate',
-    platform: 'Windows / macOS',
-    in_stock: true
-  },
-  {
-    id: 'prod-2',
-    name: 'Adobe Creative Suite - Monatspaket',
-    price_cents: 5499,
-    licence_type: 'Subscription',
-    duration: '1 Monat',
-    platform: 'Windows / macOS',
-    in_stock: true
-  },
-  {
-    id: 'prod-3',
-    name: 'Antivirus Suite - Team',
-    price_cents: 1999,
-    licence_type: 'Endpoint Protection',
-    duration: '12 Monate',
-    platform: 'Windows',
-    in_stock: true
-  }
-];
-
 export const ShoppingCart: React.FC = () => {
   const { user } = useAuth();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [quantities, setQuantities] = useState<Record<string, number>>({
-    'prod-1': 1,
-    'prod-2': 1,
-    'prod-3': 1
-  });
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [billingEmail, setBillingEmail] = useState<string>(user?.email || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const isShoppingRole = user?.role === 'user';
+
+  useEffect(() => {
+    if (!isShoppingRole) return;
+    const fetchProducts = async () => {
+      try {
+        const response = await axios.get<Product[]>('/api/products');
+        setProducts(response.data || []);
+        const initialQty: Record<string, number> = {};
+        (response.data || []).forEach((p) => { initialQty[p.id] = 1; });
+        setQuantities(initialQty);
+      } catch {
+        setError('Produkte konnten nicht geladen werden.');
+      } finally {
+        setIsLoadingProducts(false);
+      }
+    };
+    fetchProducts();
+  }, [isShoppingRole]);
 
   const totalCents = useMemo(
     () => cart.reduce((total, item) => total + item.unit_price_cents * item.quantity, 0),

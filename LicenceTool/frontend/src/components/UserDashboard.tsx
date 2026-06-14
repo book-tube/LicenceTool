@@ -4,22 +4,23 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 interface OrderItem {
-  item_id: string;
-  product_name: string;
+  itemId: string;
+  productId: string;
+  productName: string;
   quantity: number;
-  unit_price_cents?: number;
-  licence_keys: string[];
+  unitPriceCents?: number;
+  licenceKeys: string[];
   status: string;
 }
 
 interface OrderSummary {
   id: string;
-  order_number: string;
+  orderNumber: string;
   status: string;
-  total_amount_cents: number;
+  totalAmountCents: number;
   currency: string;
-  item_count: number;
-  created_at: string;
+  itemCount: number;
+  createdAt: string;
 }
 
 interface OrderDetails extends OrderSummary {
@@ -57,7 +58,7 @@ export const UserDashboard: React.FC = () => {
       }
 
       try {
-        const response = await axios.get<OrderSummary[]>(`/api/user/${user.id}/orders`);
+        const response = await axios.get<OrderSummary[]>(`/api/orders`);
         setOrders(response.data || []);
       } catch (requestError: any) {
         setError(requestError?.response?.data?.error || 'Fehler beim Abrufen der Bestellungen');
@@ -76,7 +77,7 @@ export const UserDashboard: React.FC = () => {
     setError(null);
 
     try {
-      const response = await axios.get<OrderDetails>(`/api/user/${user.id}/orders/${orderId}`);
+      const response = await axios.get<OrderDetails>(`/api/orders/${orderId}`);
       setSelectedOrder(response.data);
     } catch (requestError: any) {
       setError(requestError?.response?.data?.error || 'Fehler beim Abrufen der Bestellungsdetails');
@@ -139,18 +140,18 @@ export const UserDashboard: React.FC = () => {
               >
                 <div className="order-card-head">
                   <div>
-                    <strong>{order.order_number}</strong>
+                    <strong>{order.orderNumber}</strong>
                     <div className="muted-text">
-                      {new Date(order.created_at).toLocaleDateString('de-DE')}
+                      {new Date(order.createdAt).toLocaleDateString('de-DE')}
                     </div>
                   </div>
                   <div className="order-card-price">
-                    <div>EUR {(order.total_amount_cents / 100).toFixed(2)}</div>
+                    <div>{order.currency} {(order.totalAmountCents / 100).toFixed(2)}</div>
                     <div className="muted-text">{statusLabel(order.status)}</div>
                   </div>
                 </div>
                 <div className="muted-text" style={{ marginTop: '8px' }}>
-                  Positionen: {order.item_count}
+                  Positionen: {order.itemCount}
                 </div>
               </article>
             ))}
@@ -162,11 +163,11 @@ export const UserDashboard: React.FC = () => {
 
       {selectedOrder && !isLoadingDetails && (
         <section className="surface-card">
-          <h2>Bestellungsdetails: {selectedOrder.order_number}</h2>
+          <h2>Bestellungsdetails: {selectedOrder.orderNumber}</h2>
 
           <div className="muted-text" style={{ marginBottom: '12px' }}>
-            <strong>Status:</strong> {statusLabel(selectedOrder.status)} | <strong>Gesamt:</strong> EUR{' '}
-            {(selectedOrder.total_amount_cents / 100).toFixed(2)} | <strong>Lizenzen:</strong> {totalLicenceCount}
+            <strong>Status:</strong> {statusLabel(selectedOrder.status)} | <strong>Gesamt:</strong> {selectedOrder.currency}{' '}
+            {(selectedOrder.totalAmountCents / 100).toFixed(2)} | <strong>Lizenzen:</strong> {totalLicenceCount}
           </div>
 
           <table className="data-table" style={{ marginBottom: '16px' }}>
@@ -180,15 +181,15 @@ export const UserDashboard: React.FC = () => {
             </thead>
             <tbody>
               {selectedOrder.items?.map((item) => (
-                <tr key={item.item_id}>
-                  <td>{item.product_name}</td>
+                <tr key={item.itemId}>
+                  <td>{item.productName}</td>
                   <td style={{ textAlign: 'center' }}>{item.quantity}</td>
                   <td style={{ textAlign: 'right' }}>
-                    {item.unit_price_cents ? `EUR ${(item.unit_price_cents / 100).toFixed(2)}` : '-'}
+                    {item.unitPriceCents ? `EUR ${(item.unitPriceCents / 100).toFixed(2)}` : '-'}
                   </td>
                   <td>
-                    {item.licence_keys && item.licence_keys.filter(Boolean).length > 0 ? (
-                      item.licence_keys
+                    {item.licenceKeys && item.licenceKeys.filter(Boolean).length > 0 ? (
+                      item.licenceKeys
                         .filter(Boolean)
                         .map((keyValue) => (
                           <div key={keyValue} className="licence-key-chip">
