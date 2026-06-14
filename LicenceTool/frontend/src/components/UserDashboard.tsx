@@ -1,16 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 interface OrderItem {
   item_id: string;
   product_name: string;
   quantity: number;
+  unit_price_cents?: number;
   licence_keys: string[];
   status: string;
 }
 
-interface Order {
+interface OrderSummary {
   id: string;
   order_number: string;
   status: string;
@@ -18,146 +20,183 @@ interface Order {
   currency: string;
   item_count: number;
   created_at: string;
+}
+
+interface OrderDetails extends OrderSummary {
   items?: OrderItem[];
 }
 
-/**
- * REQUIREMENT: User Dashboard
- * Benutzer können nur ihre eigenen Bestellungen und zugewiesenen Lizenzen sehen
- * REQUIREMENT: Multi-Item Orders
- * Zeigt mehrere Artikel pro Bestellung
- */
+const statusLabel = (status: string) => {
+  switch (status) {
+    case 'fulfilled':
+      return 'Erfuellt';
+    case 'pending':
+      return 'In Bearbeitung';
+    case 'refunded':
+      return 'Erstattet';
+    default:
+      return status;
+  }
+};
+
 export const UserDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [orders, setOrders] = useState<OrderSummary[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<OrderDetails | null>(null);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isShoppingRole = user?.role === 'user';
 
   useEffect(() => {
     const fetchOrders = async () => {
-      if (!user) return;
+      if (!user || !isShoppingRole) {
+        setIsLoadingOrders(false);
+        return;
+      }
 
       try {
-        const response = await axios.get(`/api/user/${user.id}/orders`);
-        setOrders(response.data);
-      } catch (err) {
-        setError('Fehler beim Abrufen der Bestellungen');
+        const response = await axios.get<OrderSummary[]>(`/api/user/${user.id}/orders`);
+        setOrders(response.data || []);
+      } catch (requestError: any) {
+        setError(requestError?.response?.data?.error || 'Fehler beim Abrufen der Bestellungen');
       } finally {
-        setIsLoading(false);
+        setIsLoadingOrders(false);
       }
     };
 
     fetchOrders();
-  }, [user]);
+  }, [isShoppingRole, user]);
 
-  const handleSelectOrder = async (order: Order) => {
+  const handleSelectOrder = async (orderId: string) => {
+    if (!user) return;
+
+    setIsLoadingDetails(true);
+    setError(null);
+
     try {
-      const response = await axios.get(`/api/user/${user?.id}/orders/${order.id}`);
+      const response = await axios.get<OrderDetails>(`/api/user/${user.id}/orders/${orderId}`);
       setSelectedOrder(response.data);
-    } catch (err) {
-      alert('Fehler beim Abrufen der Bestellungsdetails');
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.error || 'Fehler beim Abrufen der Bestellungsdetails');
+    } finally {
+      setIsLoadingDetails(false);
     }
   };
 
-  if (!user) return <div>Keine Authentifizierung</div>;
-  if (isLoading) return <div>Lädt...</div>;
-  if (error) return <div style={{ color: 'red' }}>{error}</div>;
+  const totalLicenceCount = useMemo(() => {
+    if (!selectedOrder?.items?.length) return 0;
+    return selectedOrder.items.reduce((sum, item) => sum + item.quantity, 0);
+  }, [selectedOrder]);
+
+  if (!user) {
+    return <div className="app-shell page-section">Bitte zuerst anmelden.</div>;
+  }
+
+  if (!isShoppingRole) {
+    return (
+      <div className="app-shell page-section surface-card role-hint role-hint-warning">
+        <h2>Benutzer-Dashboard nur fuer Benutzer</h2>
+        <p>Der Admin verwaltet Kundendaten und Lizenzen im Admin Dashboard.</p>
+      </div>
+    );
+  }
+
+  if (isLoadingOrders) {
+    return <div className="app-shell page-section">Bestellungen werden geladen...</div>;
+  }
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>Mein Konto - Bestellungen &amp; Lizenzen</h1>
+    <div className="app-shell page-section">
+      <section className="surface-card">
+        <p className="eyebrow">Mein Bereich</p>
+        <h1>Meine Bestellungen und Lizenzschluessel</h1>
+        <p className="muted-text">
+          Sie sehen hier ausschliesslich Ihre eigenen Bestellungen inklusive zugewiesener Lizenzschluessel.
+        </p>
+      </section>
 
-      <div style={{ marginBottom: '20px' }}>
+      {error && <div className="alert alert-danger">{error}</div>}
+
+      <section className="surface-card" style={{ marginBottom: '24px' }}>
         <h2>Meine Bestellungen ({orders.length})</h2>
+
         {orders.length === 0 ? (
-          <p>Sie haben noch keine Bestellungen.</p>
+          <div className="surface-card" style={{ boxShadow: 'none' }}>
+            <p>Sie haben noch keine Bestellungen.</p>
+            <Link to="/shopping" className="btn btn-primary">
+              Jetzt Lizenzen kaufen
+            </Link>
+          </div>
         ) : (
           <div>
             {orders.map((order) => (
-              <div
+              <article
                 key={order.id}
-                onClick={() => handleSelectOrder(order)}
-                style={{
-                  border: '1px solid #ddd',
-                  padding: '15px',
-                  marginBottom: '10px',
-                  cursor: 'pointer',
-                  backgroundColor: selectedOrder?.id === order.id ? '#f0f0f0' : 'white'
-                }}
+                onClick={() => handleSelectOrder(order.id)}
+                className={`order-card ${selectedOrder?.id === order.id ? 'order-card-active' : ''}`}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div className="order-card-head">
                   <div>
                     <strong>{order.order_number}</strong>
-                    <div style={{ fontSize: '0.9em', color: '#666' }}>
+                    <div className="muted-text">
                       {new Date(order.created_at).toLocaleDateString('de-DE')}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '1.2em', fontWeight: 'bold' }}>
-                      €{(order.total_amount_cents / 100).toFixed(2)}
-                    </div>
-                    <div style={{
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      backgroundColor: order.status === 'fulfilled' ? '#d4edda' : '#fff3cd',
-                      fontSize: '0.9em'
-                    }}>
-                      {order.status === 'fulfilled' ? 'Erfüllt' : order.status}
-                    </div>
+                  <div className="order-card-price">
+                    <div>EUR {(order.total_amount_cents / 100).toFixed(2)}</div>
+                    <div className="muted-text">{statusLabel(order.status)}</div>
                   </div>
                 </div>
-                <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#666' }}>
-                  {order.item_count} Artikel
+                <div className="muted-text" style={{ marginTop: '8px' }}>
+                  Positionen: {order.item_count}
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {selectedOrder && (
-        <div style={{ marginTop: '30px', padding: '15px', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
+      {isLoadingDetails && <div>Bestellungsdetails werden geladen...</div>}
+
+      {selectedOrder && !isLoadingDetails && (
+        <section className="surface-card">
           <h2>Bestellungsdetails: {selectedOrder.order_number}</h2>
 
-          <h3>Gekaufte Artikel (Multi-Item Order):</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+          <div className="muted-text" style={{ marginBottom: '12px' }}>
+            <strong>Status:</strong> {statusLabel(selectedOrder.status)} | <strong>Gesamt:</strong> EUR{' '}
+            {(selectedOrder.total_amount_cents / 100).toFixed(2)} | <strong>Lizenzen:</strong> {totalLicenceCount}
+          </div>
+
+          <table className="data-table" style={{ marginBottom: '16px' }}>
             <thead>
-              <tr style={{ backgroundColor: '#f0f0f0' }}>
-                <th style={{ border: '1px solid #ddd', padding: '10px', textAlign: 'left' }}>Produkt</th>
-                <th style={{ border: '1px solid #ddd', padding: '10px', textAlign: 'center' }}>Menge</th>
-                <th style={{ border: '1px solid #ddd', padding: '10px', textAlign: 'left' }}>Lizenzschlüssel</th>
+              <tr>
+                <th>Produkt</th>
+                <th style={{ textAlign: 'center' }}>Menge</th>
+                <th style={{ textAlign: 'right' }}>Einzelpreis</th>
+                <th>Lizenzschluessel</th>
               </tr>
             </thead>
             <tbody>
               {selectedOrder.items?.map((item) => (
                 <tr key={item.item_id}>
-                  <td style={{ border: '1px solid #ddd', padding: '10px' }}>{item.product_name}</td>
-                  <td style={{ border: '1px solid #ddd', padding: '10px', textAlign: 'center' }}>
-                    {item.quantity}
+                  <td>{item.product_name}</td>
+                  <td style={{ textAlign: 'center' }}>{item.quantity}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    {item.unit_price_cents ? `EUR ${(item.unit_price_cents / 100).toFixed(2)}` : '-'}
                   </td>
-                  <td style={{ border: '1px solid #ddd', padding: '10px' }}>
-                    {item.licence_keys?.length > 0 ? (
-                      <div>
-                        {item.licence_keys.map((key, idx) => (
-                          <div
-                            key={idx}
-                            style={{
-                              backgroundColor: '#e8f5e9',
-                              padding: '8px',
-                              marginBottom: '5px',
-                              fontFamily: 'monospace',
-                              fontSize: '0.9em',
-                              borderRadius: '4px',
-                              wordBreak: 'break-all'
-                            }}
-                          >
-                            {key}
+                  <td>
+                    {item.licence_keys && item.licence_keys.filter(Boolean).length > 0 ? (
+                      item.licence_keys
+                        .filter(Boolean)
+                        .map((keyValue) => (
+                          <div key={keyValue} className="licence-key-chip">
+                            {keyValue}
                           </div>
-                        ))}
-                      </div>
+                        ))
                     ) : (
-                      <span style={{ color: '#999' }}>Noch nicht zugewiesen</span>
+                      <span className="muted-text">Noch nicht zugewiesen</span>
                     )}
                   </td>
                 </tr>
@@ -165,10 +204,11 @@ export const UserDashboard: React.FC = () => {
             </tbody>
           </table>
 
-          <div style={{ padding: '10px', backgroundColor: '#e7f3ff', borderRadius: '4px' }}>
-            <strong>Informationen:</strong> Sie sehen hier nur Ihre eigenen Bestellungen und Lizenzen. Jede gekaufte Lizenz ist eindeutig und nicht übertragbar.
+          <div className="alert alert-info">
+            Sie sehen hier nur Daten Ihres eigenen Kontos. Bei Rueckfragen koennen Sie mit der Bestellnummer den
+            Support kontaktieren.
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

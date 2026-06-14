@@ -1,6 +1,16 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+
+interface Product {
+  id: string;
+  name: string;
+  price_cents: number;
+  licence_type: string;
+  duration: string;
+  platform: string;
+  in_stock: boolean;
+}
 
 interface CartItem {
   product_id: string;
@@ -9,288 +19,296 @@ interface CartItem {
   unit_price_cents: number;
 }
 
-/**
- * REQUIREMENT: Multi-Item Shopping
- * Benutzer können mehrere verschiedene Produkte und/oder mehrere Menge desselben Produkts kaufen
- */
+interface OrderResult {
+  order_id: string;
+  order_number: string;
+  total_amount_cents: number;
+  item_count: number;
+  status: string;
+}
+
+const availableProducts: Product[] = [
+  {
+    id: 'prod-1',
+    name: 'Office Pro - Jahreslizenz',
+    price_cents: 9999,
+    licence_type: 'Single User',
+    duration: '12 Monate',
+    platform: 'Windows / macOS',
+    in_stock: true
+  },
+  {
+    id: 'prod-2',
+    name: 'Adobe Creative Suite - Monatspaket',
+    price_cents: 5499,
+    licence_type: 'Subscription',
+    duration: '1 Monat',
+    platform: 'Windows / macOS',
+    in_stock: true
+  },
+  {
+    id: 'prod-3',
+    name: 'Antivirus Suite - Team',
+    price_cents: 1999,
+    licence_type: 'Endpoint Protection',
+    duration: '12 Monate',
+    platform: 'Windows',
+    in_stock: true
+  }
+];
+
 export const ShoppingCart: React.FC = () => {
   const { user } = useAuth();
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [quantities, setQuantities] = useState<Record<string, number>>({
+    'prod-1': 1,
+    'prod-2': 1,
+    'prod-3': 1
+  });
+  const [billingEmail, setBillingEmail] = useState<string>(user?.email || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [orderResult, setOrderResult] = useState<any>(null);
+  const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Beispiel: Diese würden normalerweise aus einer Produktliste oder von der API kommen
-  const availableProducts = [
-    { id: 'prod-1', name: 'Office Pro - Jahreslizenzen', price_cents: 9999 },
-    { id: 'prod-2', name: 'Adobe Creative Suite - 1 Monat', price_cents: 5499 },
-    { id: 'prod-3', name: 'Antivirus Suite - 1 Jahr', price_cents: 1999 }
-  ];
+  const isShoppingRole = user?.role === 'user';
 
-  const addToCart = (productId: string, quantity: number) => {
-    const product = availableProducts.find((p) => p.id === productId);
-    if (!product) return;
+  const totalCents = useMemo(
+    () => cart.reduce((total, item) => total + item.unit_price_cents * item.quantity, 0),
+    [cart]
+  );
 
-    const existingItem = cart.find((item) => item.product_id === productId);
+  const addToCart = (productId: string) => {
+    const product = availableProducts.find((entry) => entry.id === productId);
+    if (!product || !product.in_stock) {
+      return;
+    }
 
-    let updatedCart;
-    if (existingItem) {
-      updatedCart = cart.map((item) =>
-        item.product_id === productId
-          ? { ...item, quantity: item.quantity + quantity }
-          : item
-      );
-    } else {
-      updatedCart = [
-        ...cart,
+    const quantityToAdd = Math.max(1, quantities[productId] || 1);
+    setCart((current) => {
+      const existingItem = current.find((item) => item.product_id === productId);
+      if (existingItem) {
+        return current.map((item) =>
+          item.product_id === productId
+            ? { ...item, quantity: item.quantity + quantityToAdd }
+            : item
+        );
+      }
+
+      return [
+        ...current,
         {
           product_id: productId,
           product_name: product.name,
-          quantity,
+          quantity: quantityToAdd,
           unit_price_cents: product.price_cents
         }
       ];
-    }
-
-    setCart(updatedCart);
+    });
   };
 
   const removeFromCart = (productId: string) => {
-    setCart(cart.filter((item) => item.product_id !== productId));
+    setCart((current) => current.filter((item) => item.product_id !== productId));
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
+    if (!Number.isFinite(quantity)) return;
+
     if (quantity <= 0) {
       removeFromCart(productId);
-    } else {
-      setCart(
-        cart.map((item) =>
-          item.product_id === productId ? { ...item, quantity } : item
-        )
-      );
+      return;
     }
-  };
 
-  const getTotalCents = () => {
-    return cart.reduce((total, item) => total + item.unit_price_cents * item.quantity, 0);
+    setCart((current) =>
+      current.map((item) =>
+        item.product_id === productId
+          ? { ...item, quantity: Math.max(1, Math.floor(quantity)) }
+          : item
+      )
+    );
   };
 
   const handleCheckout = async () => {
-    if (!user || cart.length === 0) return;
+    if (!user || !isShoppingRole) {
+      setError('Nur Benutzer koennen Bestellungen fuer den eigenen Account ausfuehren.');
+      return;
+    }
+
+    if (!billingEmail.trim()) {
+      setError('Bitte geben Sie eine Rechnungs-E-Mail an.');
+      return;
+    }
+
+    if (cart.length === 0) {
+      setError('Der Warenkorb ist leer.');
+      return;
+    }
 
     setIsSubmitting(true);
+    setError(null);
 
     try {
-      const response = await axios.post(`/api/user/${user.id}/orders`, {
+      const payload = {
         items: cart.map((item) => ({
           product_id: item.product_id,
           quantity: item.quantity
         })),
-        billing_email: user.email,
-        company_name: user.role === 'business' ? 'Mein Unternehmen' : undefined,
-        vat_id: user.role === 'business' ? 'DE123456789' : undefined
-      });
+        billing_email: billingEmail.trim()
+      };
+
+      const response = await axios.post<OrderResult>(`/api/user/${user.id}/orders`, payload);
 
       setOrderResult(response.data);
-      setCart([]); // Clear cart after successful order
-    } catch (error) {
-      alert('Fehler beim Erstellen der Bestellung');
+      setCart([]);
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.error || 'Fehler beim Erstellen der Bestellung');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const totalCents = getTotalCents();
+  if (!user) {
+    return <div className="app-shell page-section">Bitte zuerst anmelden, um einzukaufen.</div>;
+  }
+
+  if (!isShoppingRole) {
+    return (
+      <div className="app-shell page-section surface-card role-hint role-hint-warning">
+        <h2>Shopping nur fuer Benutzer</h2>
+        <p>Der Admin verwaltet Kunden und Lizenzen im Admin Dashboard und kauft nicht selbst ein.</p>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>Shopping - Softwarelizenzen kaufen</h1>
+    <div className="app-shell page-section">
+      <section className="surface-card">
+        <h1>Shopping - Softwarelizenzen kaufen</h1>
+        <p className="muted-text">
+          Kaufen Sie mehrere Produkte in einer Bestellung. Jede Einheit wird fuer Ihren eigenen Account abgerechnet
+          und bekommt einen eindeutigen Lizenzschluessel.
+        </p>
+      </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-        {/* Produktliste */}
-        <div>
-          <h2>Verfügbare Produkte</h2>
+      {error && (
+        <div className="alert alert-danger">{error}</div>
+      )}
+
+      <div className="surface-grid surface-grid-cart">
+        <section className="surface-card">
+          <h2>Produktkatalog</h2>
           {availableProducts.map((product) => (
-            <div
-              key={product.id}
-              style={{
-                border: '1px solid #ddd',
-                padding: '15px',
-                marginBottom: '10px',
-                borderRadius: '4px'
-              }}
-            >
+            <article key={product.id} className="catalog-item">
               <h3>{product.name}</h3>
-              <div style={{ marginBottom: '10px' }}>
-                <strong>€{(product.price_cents / 100).toFixed(2)}</strong>
+              <div className="item-price">EUR {(product.price_cents / 100).toFixed(2)}</div>
+              <div className="muted-text meta-row">
+                Typ: {product.licence_type} | Laufzeit: {product.duration} | Plattform: {product.platform}
               </div>
-              <input
-                type="number"
-                min="1"
-                defaultValue="1"
-                id={`qty-${product.id}`}
-                style={{ width: '60px', padding: '5px', marginRight: '10px' }}
-              />
-              <button
-                onClick={() => {
-                  const qty = parseInt((document.getElementById(`qty-${product.id}`) as HTMLInputElement).value);
-                  addToCart(product.id, qty);
-                }}
-                style={{
-                  backgroundColor: '#4CAF50',
-                  color: 'white',
-                  border: 'none',
-                  padding: '8px 16px',
-                  cursor: 'pointer',
-                  borderRadius: '4px'
-                }}
-              >
-                In den Warenkorb
-              </button>
-            </div>
-          ))}
-        </div>
 
-        {/* Warenkorbzusammenfassung */}
-        <div>
-          <h2>Warenkorb</h2>
+              <div className="inline-actions">
+                <input
+                  type="number"
+                  min="1"
+                  value={quantities[product.id] || 1}
+                  onChange={(event) =>
+                    setQuantities((current) => ({
+                      ...current,
+                      [product.id]: Math.max(1, Number(event.target.value) || 1)
+                    }))
+                  }
+                  className="text-input qty-input"
+                />
+                <button
+                  onClick={() => addToCart(product.id)}
+                  disabled={!product.in_stock}
+                  className="btn btn-primary"
+                >
+                  {product.in_stock ? 'In den Warenkorb' : 'Nicht verfuegbar'}
+                </button>
+              </div>
+            </article>
+          ))}
+        </section>
+
+        <section className="surface-card">
+          <h2>Warenkorb & Checkout</h2>
           {cart.length === 0 ? (
-            <p style={{ color: '#999' }}>Ihr Warenkorb ist leer</p>
+            <p className="muted-text">Ihr Warenkorb ist leer.</p>
           ) : (
             <div>
-              {/* REQUIREMENT: Multi-Item Display */}
               {cart.map((item) => (
-                <div
-                  key={item.product_id}
-                  style={{
-                    border: '1px solid #e0e0e0',
-                    padding: '10px',
-                    marginBottom: '10px',
-                    borderRadius: '4px',
-                    backgroundColor: '#f9f9f9'
-                  }}
-                >
-                  <div style={{ marginBottom: '10px' }}>
-                    <strong>{item.product_name}</strong>
-                    <div style={{ fontSize: '0.9em', color: '#666' }}>
-                      €{(item.unit_price_cents / 100).toFixed(2)} pro Stück
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
-                    <button
-                      onClick={() => updateQuantity(item.product_id, item.quantity - 1)}
-                      style={{
-                        backgroundColor: '#f0f0f0',
-                        border: '1px solid #ddd',
-                        width: '30px',
-                        height: '30px',
-                        cursor: 'pointer',
-                        borderRadius: '4px'
-                      }}
-                    >
+                <div key={item.product_id} className="cart-row">
+                  <div className="cart-title">{item.product_name}</div>
+                  <div className="inline-actions">
+                    <button className="btn btn-ghost" onClick={() => updateQuantity(item.product_id, item.quantity - 1)}>
                       -
                     </button>
                     <input
                       type="number"
                       min="1"
                       value={item.quantity}
-                      onChange={(e) => updateQuantity(item.product_id, parseInt(e.target.value))}
-                      style={{ width: '50px', textAlign: 'center', padding: '5px' }}
+                      onChange={(event) => updateQuantity(item.product_id, Number(event.target.value))}
+                      className="text-input qty-input"
                     />
-                    <button
-                      onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
-                      style={{
-                        backgroundColor: '#f0f0f0',
-                        border: '1px solid #ddd',
-                        width: '30px',
-                        height: '30px',
-                        cursor: 'pointer',
-                        borderRadius: '4px'
-                      }}
-                    >
+                    <button className="btn btn-ghost" onClick={() => updateQuantity(item.product_id, item.quantity + 1)}>
                       +
                     </button>
-                    <span style={{ marginLeft: 'auto', fontWeight: 'bold' }}>
-                      €{((item.unit_price_cents * item.quantity) / 100).toFixed(2)}
+                    <span className="cart-sum">
+                      EUR {((item.unit_price_cents * item.quantity) / 100).toFixed(2)}
                     </span>
                   </div>
-
-                  <button
-                    onClick={() => removeFromCart(item.product_id)}
-                    style={{
-                      backgroundColor: '#ff6b6b',
-                      color: 'white',
-                      border: 'none',
-                      padding: '5px 10px',
-                      cursor: 'pointer',
-                      borderRadius: '4px',
-                      fontSize: '0.9em'
-                    }}
-                  >
+                  <button className="btn btn-link-danger" onClick={() => removeFromCart(item.product_id)}>
                     Entfernen
                   </button>
                 </div>
               ))}
 
-              <div
-                style={{
-                  borderTop: '2px solid #ddd',
-                  paddingTop: '15px',
-                  marginTop: '15px',
-                  backgroundColor: '#f0f0f0',
-                  padding: '15px',
-                  borderRadius: '4px'
-                }}
-              >
-                <div style={{ fontSize: '1.2em', fontWeight: 'bold', marginBottom: '15px' }}>
-                  Gesamt: €{(totalCents / 100).toFixed(2)}
+              <div className="checkout-panel">
+                <div className="field-row">
+                  <label htmlFor="billing_email">
+                    Rechnungs-E-Mail
+                  </label>
+                  <input
+                    id="billing_email"
+                    type="email"
+                    value={billingEmail}
+                    onChange={(event) => setBillingEmail(event.target.value)}
+                    className="text-input"
+                  />
+                </div>
+
+                <div className="checkout-total">
+                  Gesamt: EUR {(totalCents / 100).toFixed(2)}
                 </div>
 
                 <button
                   onClick={handleCheckout}
                   disabled={isSubmitting}
-                  style={{
-                    backgroundColor: '#4CAF50',
-                    color: 'white',
-                    border: 'none',
-                    padding: '12px 20px',
-                    fontSize: '1.1em',
-                    cursor: 'pointer',
-                    borderRadius: '4px',
-                    width: '100%',
-                    opacity: isSubmitting ? '0.5' : '1'
-                  }}
+                  className="btn btn-primary btn-full"
                 >
-                  {isSubmitting ? 'Wird bestellt...' : 'Bestellung abschließen'}
+                  {isSubmitting ? 'Bestellung wird erstellt...' : 'Bestellung abschliessen'}
                 </button>
               </div>
             </div>
           )}
 
           {orderResult && (
-            <div
-              style={{
-                marginTop: '15px',
-                backgroundColor: '#d4edda',
-                border: '1px solid #c3e6cb',
-                padding: '15px',
-                borderRadius: '4px'
-              }}
-            >
-              <h3>✓ Bestellung erfolgreich!</h3>
-              <p><strong>Bestellnummer:</strong> {orderResult.order_number}</p>
-              <p><strong>Artikel:</strong> {orderResult.item_count}</p>
-              <p><strong>Betrag:</strong> €{(orderResult.total_amount_cents / 100).toFixed(2)}</p>
-              <p style={{ fontSize: '0.9em', color: '#666' }}>
-                Ihre Lizenzen werden in Kürze per E-Mail zugesendet.
+            <div className="alert alert-success" style={{ marginTop: '15px' }}>
+              <h3>Bestellung erfolgreich erstellt</h3>
+              <p>
+                <strong>Bestellnummer:</strong> {orderResult.order_number}
+              </p>
+              <p>
+                <strong>Positionen:</strong> {orderResult.item_count}
+              </p>
+              <p>
+                <strong>Betrag:</strong> EUR {(orderResult.total_amount_cents / 100).toFixed(2)}
+              </p>
+              <p className="muted-text">
+                Die zugewiesenen Lizenzschluessel sehen Sie im Benutzer-Dashboard.
               </p>
             </div>
           )}
-
-          <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#e7f3ff', borderRadius: '4px', fontSize: '0.9em' }}>
-            <strong>Hinweis:</strong> Sie können mehrere verschiedene Produkte und Mengen in einer Bestellung kaufen. Jede Lizenz wird eindeutig zugewiesen.
-          </div>
-        </div>
+        </section>
       </div>
     </div>
   );

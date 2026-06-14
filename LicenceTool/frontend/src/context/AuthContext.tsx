@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import axios from 'axios';
 
-export type UserRole = 'admin' | 'private' | 'business' | null;
+export type UserRole = 'admin' | 'user' | null;
 
 interface User {
   id: string;
@@ -25,28 +25,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [isLoading, setIsLoading] = useState(true);
 
+  const inferRoleFromEmail = (email: string): Exclude<UserRole, null> => {
+    const normalized = email.toLowerCase();
+    if (normalized.includes('admin')) return 'admin';
+    return 'user';
+  };
+
   // Verify token on mount
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      // In real app: verify token with backend
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser) as User;
+          if (parsed?.id && parsed?.email && parsed?.role) {
+            setUser(parsed);
+          }
+        } catch {
+          localStorage.removeItem('user');
+        }
+      }
       setIsLoading(false);
     } else {
+      setUser(null);
       setIsLoading(false);
     }
   }, [token]);
 
   const login = async (email: string, password: string) => {
     try {
-      // In real app: call login API
+      // Demo fallback until real login API is connected.
+      const role = inferRoleFromEmail(email);
       const userData: User = {
         id: 'user-123',
         email,
-        role: 'private'
+        role
       };
       setUser(userData);
       setToken('mock-token');
       localStorage.setItem('token', 'mock-token');
+      localStorage.setItem('user', JSON.stringify(userData));
+      axios.defaults.headers.common['Authorization'] = 'Bearer mock-token';
     } catch (error) {
       throw new Error('Login fehlgeschlagen');
     }
@@ -56,11 +76,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setToken(null);
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     delete axios.defaults.headers.common['Authorization'];
   };
 
   const canAccess = (requiredRoles: UserRole[]) => {
-    if (!user) return false;
+    if (!user || !user.role) return false;
     return requiredRoles.includes(user.role);
   };
 

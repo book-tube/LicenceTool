@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
 
 interface Order {
   id: string;
@@ -12,99 +13,223 @@ interface Order {
   created_at: string;
 }
 
-/**
- * REQUIREMENT: Admin Dashboard
- * Nur Admins können auf diese Seite zugreifen und alle Bestellungen verwalten
- */
+const statusStyles: Record<string, { backgroundColor: string; color: string }> = {
+  pending: { backgroundColor: '#fff7e6', color: '#7a4e00' },
+  fulfilled: { backgroundColor: '#e9f8ee', color: '#1d5f2f' },
+  refunded: { backgroundColor: '#ffecec', color: '#8f2020' }
+};
+
 export const AdminDashboard: React.FC = () => {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [processingOrderId, setProcessingOrderId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const refreshOrders = async () => {
+    const response = await axios.get<Order[]>('/api/admin/orders');
+    setOrders(response.data || []);
+  };
 
   useEffect(() => {
     const fetchOrders = async () => {
+      if (user?.role !== 'admin') {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const response = await axios.get('/api/admin/orders');
-        setOrders(response.data);
-      } catch (err) {
-        setError('Fehler beim Abrufen der Bestellungen');
+        await refreshOrders();
+      } catch (requestError: any) {
+        setError(requestError?.response?.data?.error || 'Fehler beim Abrufen der Bestellungen');
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchOrders();
-  }, []);
+  }, [user]);
 
   const handleRefund = async (orderId: string) => {
-    if (!window.confirm('Möchten Sie diese Bestellung wirklich stornieren?')) {
+    if (!window.confirm('Moechten Sie diese Bestellung wirklich stornieren? Lizenzen werden widerrufen.')) {
       return;
     }
 
+    setProcessingOrderId(orderId);
+    setError(null);
+
     try {
       await axios.post(`/api/admin/orders/${orderId}/refund`);
-      // Refresh orders
-      const response = await axios.get('/api/admin/orders');
-      setOrders(response.data);
-      alert('Bestellung erfolgreich storniert und Lizenzen widerrufen');
-    } catch (err) {
-      alert('Fehler beim Stornieren der Bestellung');
+      await refreshOrders();
+    } catch (requestError: any) {
+      setError(requestError?.response?.data?.error || 'Fehler beim Stornieren der Bestellung');
+    } finally {
+      setProcessingOrderId(null);
     }
   };
 
-  if (isLoading) return <div>Lädt...</div>;
-  if (error) return <div style={{ color: 'red' }}>{error}</div>;
+  const totals = useMemo(() => {
+    return orders.reduce(
+      (acc, order) => {
+        acc.orderCount += 1;
+        acc.itemCount += Number(order.item_count || 0);
+        acc.revenueCents += Number(order.total_amount_cents || 0);
+        return acc;
+      },
+      { orderCount: 0, itemCount: 0, revenueCents: 0 }
+    );
+  }, [orders]);
+
+  const visibleOrders = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    if (!normalizedSearch) {
+      return orders;
+    }
+
+    return orders.filter((order) => {
+      return [order.order_number, order.email, order.company_name || '', order.status]
+        .join(' ')
+        .toLowerCase()
+        .includes(normalizedSearch);
+    });
+  }, [orders, searchTerm]);
+
+  const visibleTotals = useMemo(() => {
+    return visibleOrders.reduce(
+      (acc, order) => {
+        acc.orderCount += 1;
+        acc.itemCount += Number(order.item_count || 0);
+        acc.revenueCents += Number(order.total_amount_cents || 0);
+        return acc;
+      },
+      { orderCount: 0, itemCount: 0, revenueCents: 0 }
+    );
+  }, [visibleOrders]);
+
+  const uniqueCustomerCount = useMemo(() => {
+    return new Set(visibleOrders.map((order) => order.email)).size;
+  }, [visibleOrders]);
+
+  if (!user) {
+    return <div className="app-shell page-section">Bitte zuerst anmelden.</div>;
+  }
+
+  if (user.role !== 'admin') {
+    return (
+      <div className="app-shell page-section surface-card role-hint role-hint-danger">
+        <h2>Zugriff verweigert</h2>
+        <p>Nur Admin-Benutzer duerfen das Admin-Dashboard aufrufen.</p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return <div className="app-shell page-section">Admin-Dashboard wird geladen...</div>;
+  }
 
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>Admin Dashboard - Bestellungsverwaltung</h1>
+    <div className="app-shell page-section">
+      <section className="surface-card">
+        <p className="eyebrow">Admin Bereich</p>
+        <h1>Kunden- und Lizenzverwaltung</h1>
+        <p className="muted-text">Sie sehen alle Kunden, deren Bestellungen und können Lizenzen entziehen.</p>
+      </section>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div
+        className="surface-grid"
+        style={{ gridTemplateColumns: 'repeat(3, minmax(140px, 1fr))', marginBottom: '18px' }}
+      >
+        <article className="surface-card stat-card">
+          <div className="stat-label">Kunden</div>
+          <div className="stat-value">{uniqueCustomerCount}</div>
+        </article>
+        <article className="surface-card stat-card">
+          <div className="stat-label">Bestellungen</div>
+          <div className="stat-value">{visibleTotals.orderCount}</div>
+        </article>
+        <article className="surface-card stat-card">
+          <div className="stat-label">Lizenzen gesamt</div>
+          <div className="stat-value">{visibleTotals.itemCount}</div>
+        </article>
+      </div>
+
+      {error && <div className="alert alert-danger">{error}</div>}
+
+      <div className="surface-card" style={{ marginBottom: '16px' }}>
+        <div className="field-row" style={{ marginBottom: 0 }}>
+          <label htmlFor="order-search">Kunden oder Bestellungen suchen</label>
+          <input
+            id="order-search"
+            type="text"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            className="text-input"
+            placeholder="z. B. E-Mail, Bestellnummer, Firma oder Status"
+          />
+        </div>
+      </div>
+
+      <table className="data-table">
         <thead>
-          <tr style={{ backgroundColor: '#f0f0f0' }}>
-            <th style={{ border: '1px solid #ddd', padding: '10px' }}>Bestellnummer</th>
-            <th style={{ border: '1px solid #ddd', padding: '10px' }}>Kunde</th>
-            <th style={{ border: '1px solid #ddd', padding: '10px' }}>Artikel</th>
-            <th style={{ border: '1px solid #ddd', padding: '10px' }}>Betrag</th>
-            <th style={{ border: '1px solid #ddd', padding: '10px' }}>Status</th>
-            <th style={{ border: '1px solid #ddd', padding: '10px' }}>Aktionen</th>
+          <tr>
+            <th>Bestellnummer</th>
+            <th>Kunde</th>
+            <th>Artikel</th>
+            <th>Betrag</th>
+            <th>Status</th>
+            <th>Datum</th>
+            <th>Aktionen</th>
           </tr>
         </thead>
         <tbody>
-          {orders.map((order) => (
-            <tr key={order.id}>
-              <td style={{ border: '1px solid #ddd', padding: '10px' }}>{order.order_number}</td>
-              <td style={{ border: '1px solid #ddd', padding: '10px' }}>
-                {order.email}
-                {order.company_name && <div style={{ fontSize: '0.9em', color: '#666' }}>{order.company_name}</div>}
-              </td>
-              <td style={{ border: '1px solid #ddd', padding: '10px', textAlign: 'center' }}>{order.item_count}</td>
-              <td style={{ border: '1px solid #ddd', padding: '10px' }}>€{(order.total_amount_cents / 100).toFixed(2)}</td>
-              <td style={{ border: '1px solid #ddd', padding: '10px' }}>{order.status}</td>
-              <td style={{ border: '1px solid #ddd', padding: '10px' }}>
-                {order.status === 'pending' && (
-                  <button
-                    onClick={() => handleRefund(order.id)}
+          {visibleOrders.map((order) => {
+            const statusStyle = statusStyles[order.status] || { backgroundColor: '#f2f2f2', color: '#333' };
+            const canRefund = order.status !== 'refunded';
+
+            return (
+              <tr key={order.id}>
+                <td>{order.order_number}</td>
+                <td>
+                  {order.email}
+                  {order.company_name && (
+                    <div className="muted-text">{order.company_name}</div>
+                  )}
+                </td>
+                <td style={{ textAlign: 'center' }}>{order.item_count}</td>
+                <td>EUR {(order.total_amount_cents / 100).toFixed(2)}</td>
+                <td>
+                  <span
                     style={{
-                      backgroundColor: '#ff6b6b',
-                      color: 'white',
-                      border: 'none',
-                      padding: '5px 10px',
-                      cursor: 'pointer',
-                      borderRadius: '4px'
+                      padding: '4px 8px',
+                      borderRadius: '999px',
+                      backgroundColor: statusStyle.backgroundColor,
+                      color: statusStyle.color,
+                      fontWeight: 600,
+                      fontSize: '0.85rem'
                     }}
                   >
-                    Stornieren
+                    {order.status}
+                  </span>
+                </td>
+                <td>{new Date(order.created_at).toLocaleDateString('de-DE')}</td>
+                <td>
+                  <button
+                    onClick={() => handleRefund(order.id)}
+                    disabled={!canRefund || processingOrderId === order.id}
+                    className="btn btn-danger"
+                  >
+                    {processingOrderId === order.id ? 'Verarbeite...' : canRefund ? 'Lizenz entziehen' : 'Entzogen'}
                   </button>
-                )}
-              </td>
-            </tr>
-          ))}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
-      <div style={{ marginTop: '20px', padding: '10px', backgroundColor: '#e7f3ff', borderRadius: '4px' }}>
-        <strong>Hinweis:</strong> Admins können alle Bestellungen verwalten, Stornierungen verarbeiten und damit verknüpfte Lizenzen widerrufen.
+      <div className="alert alert-info" style={{ marginTop: '20px' }}>
+        <strong>Hinweis:</strong> Als Admin verwalten Sie alle Kunden zentral und können Lizenzen bei Bedarf entziehen.
       </div>
     </div>
   );

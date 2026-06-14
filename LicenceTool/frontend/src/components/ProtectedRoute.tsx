@@ -17,17 +17,25 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredRoles,
   fallback
 }) => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, canAccess } = useAuth();
 
   if (isLoading) {
-    return <div>Lädt...</div>;
+    return <div style={{ padding: '24px' }}>Berechtigungen werden geladen...</div>;
   }
 
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!requiredRoles.includes(user.role)) {
+  if (!canAccess(requiredRoles)) {
+    if (user.role === 'admin') {
+      return <Navigate to="/admin" replace />;
+    }
+
+    if (user.role === 'user') {
+      return <Navigate to="/me" replace />;
+    }
+
     return fallback ? (
       <>{fallback}</>
     ) : (
