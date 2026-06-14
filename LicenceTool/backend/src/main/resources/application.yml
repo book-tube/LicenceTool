@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: licence-tool-backend
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/licence_tool}
+    username: ${DATABASE_USER:licence}
+    password: ${DATABASE_PASSWORD:licence}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # Schema is owned by Flyway, never let Hibernate touch it
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # Keycloak acts as the OIDC provider. Spring validates the JWTs it issues.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/licence-tool}
+
+# Name of the Keycloak client whose roles should be mapped (resource_access.<client>.roles)
+keycloak:
+  resource-client-id: ${KEYCLOAK_CLIENT_ID:licence-tool-backend}
+
+server:
+  port: ${PORT:8080}
+
+logging:
+  level:
+    org.flywaydb: INFO
+

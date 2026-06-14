@@ -1,0 +1,57 @@
+{
+  "realm": "licence-tool",
+  "enabled": true,
+  "roles": {
+    "realm": [
+      { "name": "admin", "description": "Administrator: full control" },
+      { "name": "private", "description": "Private user (B2C)" },
+      { "name": "business", "description": "Business user (B2B)" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "licence-tool-backend",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "change-me",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["*"],
+      "webOrigins": ["*"]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin-user",
+      "enabled": true,
+      "email": "admin@licence.local",
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "User",
+      "credentials": [{ "type": "password", "value": "admin", "temporary": false }],
+      "realmRoles": ["admin"]
+    },
+    {
+      "username": "private-user",
+      "enabled": true,
+      "email": "private@licence.local",
+      "emailVerified": true,
+      "firstName": "Private",
+      "lastName": "User",
+      "credentials": [{ "type": "password", "value": "private", "temporary": false }],
+      "realmRoles": ["private"]
+    },
+    {
+      "username": "business-user",
+      "enabled": true,
+      "email": "business@licence.local",
+      "emailVerified": true,
+      "firstName": "Business",
+      "lastName": "User",
+      "credentials": [{ "type": "password", "value": "business", "temporary": false }],
+      "realmRoles": ["business"]
+    }
+  ]
+}
+
